@@ -390,7 +390,7 @@ func runBench(args []string) int {
 	fs.StringVar(&inPath, "in", "", "input PPM path")
 	fs.StringVar(&key, "key", "", "embedding key")
 	fs.StringVar(&msg, "msg", "", "message payload")
-	fs.Float64Var(&alpha, "alpha", 3.0, "embedding strength")
+	fs.Float64Var(&alpha, "alpha", 5.0, "embedding strength")
 	fs.SetOutput(io.Discard)
 
 	if err := fs.Parse(args); err != nil {

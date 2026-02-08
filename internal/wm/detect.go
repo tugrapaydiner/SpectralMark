@@ -3,6 +3,8 @@ package wm
 import (
 	"fmt"
 	"sort"
+	"unicode"
+	"unicode/utf8"
 
 	spectralimage "spectralmark/internal/image"
 	spectralmath "spectralmark/internal/math"
@@ -25,20 +27,55 @@ func DetectPPM(path, key string) (score float32, present bool, msg string, ok bo
 	}
 
 	y, _, _ := spectralimage.RGBToYCbCr(img)
-	yPad, w2, h2 := spectralmath.PadTo8(y, img.W, img.H)
+	score, present, msg, ok = detectFromLuma(y, img.W, img.H, key)
+	if ok {
+		return
+	}
+
+	maxOffsetX := 7
+	if img.W-1 < maxOffsetX {
+		maxOffsetX = img.W - 1
+	}
+	maxOffsetY := 7
+	if img.H-1 < maxOffsetY {
+		maxOffsetY = img.H - 1
+	}
+
+	for oy := 0; oy <= maxOffsetY; oy++ {
+		for ox := 0; ox <= maxOffsetX; ox++ {
+			if ox == 0 && oy == 0 {
+				continue
+			}
+
+			yShift := shiftLuma(y, img.W, img.H, ox, oy)
+			candScore, candPresent, candMsg, candOK := detectFromLuma(yShift, img.W, img.H, key)
+			if betterDetectCandidate(candScore, candOK, score, ok) {
+				score = candScore
+				present = candPresent
+				msg = candMsg
+				ok = candOK
+			}
+		}
+	}
+
+	return
+}
+
+func detectFromLuma(y []float32, w, h int, key string) (score float32, present bool, msg string, ok bool) {
+	yPad, w2, h2 := spectralmath.PadTo8(y, w, h)
 	if w2 <= 0 || h2 <= 0 {
-		return 0, false, "", false, nil
+		return 0, false, "", false
 	}
 
 	blockCols := w2 / 8
 	blockRows := h2 / 8
 	blockCount := blockCols * blockRows
 	if blockCount <= 0 {
-		return 0, false, "", false, nil
+		return 0, false, "", false
 	}
 	totalSlots := blockCount * len(midFreqPositions)
 	if totalSlots < spreadChipsPerSymbol {
-		return 0, false, "", false, nil
+		return 0, false, "", false
 	}
 
 	coeffVals := make([][]float32, blockCount)
@@ -60,7 +97,7 @@ func DetectPPM(path, key string) (score float32, present bool, msg string, ok bo
 	neededSlots := symbolCount * spreadChipsPerSymbol
 	slots, chips := shuffledSlotsAndChips(key, totalSlots, neededSlots)
 	if len(slots) != neededSlots || len(chips) != neededSlots {
-		return 0, false, "", false, nil
+		return 0, false, "", false
 	}
 
 	symbolSoft := make([]float32, symbolCount)
@@ -85,14 +122,47 @@ func DetectPPM(path, key string) (score float32, present bool, msg string, ok bo
 	}
 
 	if len(symbols) == 0 {
-		return 0, false, "", false, nil
+		return 0, false, "", false
 	}
 
-	msg, ok = decodePayloadFromSymbolSoft(symbolSoft, 2, 8)
+	msg, ok = decodePayloadFromSymbolSoft(symbolSoft, 2, 10)
 	score = estimateDetectScoreSymbols(symbols, msg, ok)
 	present = ok
-
 	return
+}
+
+func shiftLuma(y []float32, w, h, ox, oy int) []float32 {
+	if ox <= 0 && oy <= 0 {
+		out := make([]float32, len(y))
+		copy(out, y)
+		return out
+	}
+
+	out := make([]float32, w*h)
+	for row := 0; row < h; row++ {
+		srcY := row + oy
+		if srcY >= h {
+			srcY = h - 1
+		}
+		dst := row * w
+		srcRow := srcY * w
+
+		for col := 0; col < w; col++ {
+			srcX := col + ox
+			if srcX >= w {
+				srcX = w - 1
+			}
+			out[dst+col] = y[srcRow+srcX]
+		}
+	}
+	return out
+}
+
+func betterDetectCandidate(candScore float32, candOK bool, bestScore float32, bestOK bool) bool {
+	if candOK != bestOK {
+		return candOK
+	}
+	return candScore > bestScore
 }
 
 func decodePayloadFromSymbolSoft(symbolSoft []float32, maxSyncErrors int, maxDataCandidates int) (msg string, ok bool) {
@@ -171,6 +241,9 @@ func decodeRawBitsDirect(rawBits []uint8, maxSyncErrors int) (msg string, ok boo
 			if gotCRC != CRC16(data) {
 				continue
 			}
+			if !isPlausibleMessageBytes(data) {
+				continue
+			}
 
 			return string(data), true
 		}
@@ -233,64 +306,86 @@ func decodeRawBitsWithBitFixes(rawBits []uint8, rawConf []float32, maxSyncErrors
 				candidateIdx = candidateIdx[:maxDataCandidates]
 			}
 
-			// Try single-bit corrections.
-			for _, idx := range candidateIdx {
-				testBits := make([]uint8, len(rawBits))
-				copy(testBits, rawBits)
-				testBits[idx] ^= 1
-
-				data := make([]byte, msgLen)
-				for i := 0; i < msgLen; i++ {
-					data[i] = readByteAtBit(testBits, dataBitStart+i*8)
-				}
-				if CRC16(data) == gotCRC {
-					return string(data), true
-				}
+			maxFlips := 3
+			if start == 0 && errCount == 0 {
+				maxFlips = 5
 			}
 
-			// Try two-bit corrections.
-			for i := 0; i < len(candidateIdx); i++ {
-				for j := i + 1; j < len(candidateIdx); j++ {
-					testBits := make([]uint8, len(rawBits))
-					copy(testBits, rawBits)
-					testBits[candidateIdx[i]] ^= 1
-					testBits[candidateIdx[j]] ^= 1
-
-					data := make([]byte, msgLen)
-					for k := 0; k < msgLen; k++ {
-						data[k] = readByteAtBit(testBits, dataBitStart+k*8)
-					}
-					if CRC16(data) == gotCRC {
-						return string(data), true
-					}
-				}
-			}
-
-			// Try three-bit corrections.
-			for i := 0; i < len(candidateIdx); i++ {
-				for j := i + 1; j < len(candidateIdx); j++ {
-					for m := j + 1; m < len(candidateIdx); m++ {
-						testBits := make([]uint8, len(rawBits))
-						copy(testBits, rawBits)
-						testBits[candidateIdx[i]] ^= 1
-						testBits[candidateIdx[j]] ^= 1
-						testBits[candidateIdx[m]] ^= 1
-
-						data := make([]byte, msgLen)
-						for k := 0; k < msgLen; k++ {
-							data[k] = readByteAtBit(testBits, dataBitStart+k*8)
-						}
-						if CRC16(data) == gotCRC {
-							return string(data), true
-						}
-					}
-				}
+			if msg, ok := tryDecodeWithBitFlips(rawBits, dataBitStart, msgLen, gotCRC, candidateIdx, maxFlips); ok {
+				return msg, true
 			}
 
 		}
 	}
 
 	return "", false
+}
+
+func tryDecodeWithBitFlips(rawBits []uint8, dataBitStart, msgLen int, gotCRC uint16, candidateIdx []int, maxFlips int) (string, bool) {
+	if len(candidateIdx) == 0 || maxFlips <= 0 {
+		return "", false
+	}
+	if maxFlips > len(candidateIdx) {
+		maxFlips = len(candidateIdx)
+	}
+
+	testBits := make([]uint8, len(rawBits))
+	copy(testBits, rawBits)
+
+	for flips := 1; flips <= maxFlips; flips++ {
+		if msg, ok := searchFlipCombinations(testBits, candidateIdx, 0, flips, dataBitStart, msgLen, gotCRC); ok {
+			return msg, true
+		}
+	}
+
+	return "", false
+}
+
+func searchFlipCombinations(bits []uint8, candidateIdx []int, start, flipsLeft, dataBitStart, msgLen int, gotCRC uint16) (string, bool) {
+	if flipsLeft == 0 {
+		data := make([]byte, msgLen)
+		for i := 0; i < msgLen; i++ {
+			data[i] = readByteAtBit(bits, dataBitStart+i*8)
+		}
+		if CRC16(data) == gotCRC {
+			if !isPlausibleMessageBytes(data) {
+				return "", false
+			}
+			return string(data), true
+		}
+		return "", false
+	}
+
+	limit := len(candidateIdx) - flipsLeft
+	for i := start; i <= limit; i++ {
+		idx := candidateIdx[i]
+		bits[idx] ^= 1
+		if msg, ok := searchFlipCombinations(bits, candidateIdx, i+1, flipsLeft-1, dataBitStart, msgLen, gotCRC); ok {
+			return msg, true
+		}
+		bits[idx] ^= 1
+	}
+
+	return "", false
+}
+
+func isPlausibleMessageBytes(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	if !utf8.Valid(data) {
+		return false
+	}
+	s := string(data)
+	for _, r := range s {
+		if r == '\n' || r == '\r' || r == '\t' {
+			continue
+		}
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func candidateLengths(fieldLen uint16, maxLenFit int) []int {
@@ -310,7 +405,7 @@ func candidateLengths(fieldLen uint16, maxLenFit int) []int {
 		if added[l] {
 			continue
 		}
-		if hamming16(fieldLen, uint16(l)) <= 2 {
+		if hamming16(fieldLen, uint16(l)) <= 3 {
 			out = append(out, l)
 			added[l] = true
 		}

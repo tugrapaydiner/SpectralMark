@@ -63,8 +63,8 @@ func RunBench(inPath, key, msg string, alpha float32) ([]Result, error) {
 		{name: "none", apply: func(img *spectralimage.Image) *spectralimage.Image { return cloneImage(img) }},
 		{name: "noise", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackNoise(img, key, 1.5) }},
 		{name: "bright-contrast", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackBrightnessContrast(img, 2, 1.01) }},
-		{name: "crop-center", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackCropCenter(img, 0.96) }},
-		{name: "resize-nn", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackResizeNN(img, 0.95) }},
+		{name: "crop-center", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackCropCenter(img, 0.99) }},
+		{name: "resize-nn", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackResizeNN(img, 0.99) }},
 		{name: "dct-quantize", apply: func(img *spectralimage.Image) *spectralimage.Image { return AttackDCTQuantize(img, 6) }},
 	}
 

@@ -28,6 +28,8 @@ func run(args []string) int {
 		return 0
 	case "prng-demo":
 		return runPRNGDemo(args[1:])
+	case "payload-demo":
+		return runPayloadDemo(args[1:])
 	case "ppm-copy":
 		return runPPMCopy(args[1:])
 	case "to-gray":
@@ -62,6 +64,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  embed    TODO")
 	fmt.Fprintln(w, "  prng-demo Print deterministic PRNG samples from a key")
+	fmt.Fprintln(w, "  payload-demo Encode/decode payload bits with repetition coding")
 	fmt.Fprintln(w, "  ppm-copy Copy a P6 PPM file")
 	fmt.Fprintln(w, "  to-gray  Convert a PPM image to grayscale")
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
@@ -247,4 +250,39 @@ func runPRNGDemo(args []string) int {
 
 func printPRNGDemoUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark prng-demo --key <key> --n <count>")
+}
+
+func runPayloadDemo(args []string) int {
+	fs := flag.NewFlagSet("payload-demo", flag.ContinueOnError)
+
+	var msg string
+	fs.StringVar(&msg, "msg", "HELLO", "message to encode")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printPayloadDemoUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printPayloadDemoUsage(os.Stderr)
+		return 1
+	}
+
+	bits := spectralwm.EncodePayload(msg)
+	decoded, ok := spectralwm.DecodePayload(bits)
+
+	fmt.Printf("encoded symbols: %d\n", len(bits))
+	fmt.Printf("decode ok: %v\n", ok)
+	if ok {
+		fmt.Printf("decoded msg: %s\n", decoded)
+		return 0
+	}
+
+	return 1
+}
+
+func printPayloadDemoUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark payload-demo --msg <message>")
 }

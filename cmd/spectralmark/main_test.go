@@ -89,3 +89,10 @@ func TestRunPRNGDemo(t *testing.T) {
 		t.Fatalf("run() returned %d, want 0", code)
 	}
 }
+
+func TestRunPayloadDemo(t *testing.T) {
+	code := run([]string{"payload-demo", "--msg", "HELLO"})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	stdmath "math"
 	"os"
 
+	spectralbench "spectralmark/internal/bench"
 	spectralimage "spectralmark/internal/image"
 	spectralmath "spectralmark/internal/math"
 	spectralutil "spectralmark/internal/util"
@@ -39,8 +40,7 @@ func run(args []string) int {
 	case "detect":
 		return runDetect(args[1:])
 	case "bench":
-		fmt.Println("TODO: bench")
-		return 0
+		return runBench(args[1:])
 	case "serve":
 		fmt.Println("TODO: serve")
 		return 0
@@ -67,7 +67,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  to-gray  Convert a PPM image to grayscale")
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
 	fmt.Fprintln(w, "  detect   Detect watermark and recover message")
-	fmt.Fprintln(w, "  bench    TODO")
+	fmt.Fprintln(w, "  bench    Run attack robustness benchmark")
 	fmt.Fprintln(w, "  serve    TODO")
 	fmt.Fprintln(w, "  metrics  Compute PSNR and write amplified diff image")
 	fmt.Fprintln(w, "  help     Show this help")
@@ -378,6 +378,54 @@ func runPayloadDemo(args []string) int {
 
 func printPayloadDemoUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark payload-demo --msg <message>")
+}
+
+func runBench(args []string) int {
+	fs := flag.NewFlagSet("bench", flag.ContinueOnError)
+
+	var inPath string
+	var key string
+	var msg string
+	var alpha float64
+	fs.StringVar(&inPath, "in", "", "input PPM path")
+	fs.StringVar(&key, "key", "", "embedding key")
+	fs.StringVar(&msg, "msg", "", "message payload")
+	fs.Float64Var(&alpha, "alpha", 3.0, "embedding strength")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printBenchUsage(os.Stderr)
+		return 1
+	}
+	if inPath == "" || key == "" || msg == "" {
+		fmt.Fprintln(os.Stderr, "--in, --key, and --msg are required")
+		printBenchUsage(os.Stderr)
+		return 1
+	}
+	if alpha <= 0 {
+		fmt.Fprintln(os.Stderr, "--alpha must be > 0")
+		printBenchUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printBenchUsage(os.Stderr)
+		return 1
+	}
+
+	results, err := spectralbench.RunBench(inPath, key, msg, float32(alpha))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bench failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Print(spectralbench.FormatResultsTable(results))
+	return 0
+}
+
+func printBenchUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark bench --in <input.ppm> --key <key> --msg <msg> [--alpha <strength>]")
 }
 
 func runMetrics(args []string) int {

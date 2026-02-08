@@ -231,3 +231,37 @@ func TestRunMetrics(t *testing.T) {
 		t.Fatalf("expected diff image file, got stat error: %v", err)
 	}
 }
+
+func TestRunBench(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "in.ppm")
+
+	img := &spectralimage.Image{
+		W:   128,
+		H:   128,
+		Pix: make([]spectralimage.Rgb, 128*128),
+	}
+	for y := 0; y < img.H; y++ {
+		for x := 0; x < img.W; x++ {
+			i := y*img.W + x
+			img.Pix[i] = spectralimage.Rgb{
+				R: uint8((x + y) % 256),
+				G: uint8((2*x + y) % 256),
+				B: uint8((x + 3*y) % 256),
+			}
+		}
+	}
+	if err := spectralimage.WritePPM(inPath, img); err != nil {
+		t.Fatalf("WritePPM() error = %v", err)
+	}
+
+	code := run([]string{
+		"bench",
+		"--in", inPath,
+		"--key", "k",
+		"--msg", "HELLO",
+	})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+}

@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	stdmath "math"
 	"os"
 
 	spectralimage "spectralmark/internal/image"
+	spectralmath "spectralmark/internal/math"
 )
 
 func main() {
@@ -27,6 +29,8 @@ func run(args []string) int {
 		return runPPMCopy(args[1:])
 	case "to-gray":
 		return runToGray(args[1:])
+	case "dct-check":
+		return runDCTCheck(args[1:])
 	case "detect":
 		fmt.Println("TODO: detect")
 		return 0
@@ -56,6 +60,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  embed    TODO")
 	fmt.Fprintln(w, "  ppm-copy Copy a P6 PPM file")
 	fmt.Fprintln(w, "  to-gray  Convert a PPM image to grayscale")
+	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
 	fmt.Fprintln(w, "  detect   TODO")
 	fmt.Fprintln(w, "  bench    TODO")
 	fmt.Fprintln(w, "  serve    TODO")
@@ -162,4 +167,34 @@ func runToGray(args []string) int {
 
 func printToGrayUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark to-gray --in <input.ppm> --out <output.ppm>")
+}
+
+func runDCTCheck(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "Usage: spectralmark dct-check")
+		return 1
+	}
+
+	var block [8][8]float32
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			block[y][x] = float32((y*8 + x) - 32)
+		}
+	}
+
+	coeff := spectralmath.DCT8(block)
+	recon := spectralmath.IDCT8(coeff)
+
+	maxErr := float32(0)
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			err := float32(stdmath.Abs(float64(recon[y][x] - block[y][x])))
+			if err > maxErr {
+				maxErr = err
+			}
+		}
+	}
+
+	fmt.Printf("max reconstruction error: %.9f\n", maxErr)
+	return 0
 }

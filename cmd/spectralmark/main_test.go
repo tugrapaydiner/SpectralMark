@@ -75,3 +75,10 @@ func TestRunToGrayProducesGrayscale(t *testing.T) {
 		}
 	}
 }
+
+func TestRunDCTCheck(t *testing.T) {
+	code := run([]string{"dct-check"})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+}

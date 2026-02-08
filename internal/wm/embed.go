@@ -46,47 +46,66 @@ func EmbedPPM(inPath, outPath, key, msg string, alpha float32) error {
 	bits := EncodePayload(msg)
 	blockCols := w2 / 8
 	blockRows := h2 / 8
-	capacity := blockCols * blockRows * len(midFreqPositions)
-	if len(bits) > capacity {
-		return fmt.Errorf("payload too large for image: payload symbols=%d capacity=%d", len(bits), capacity)
+	blockCount := blockCols * blockRows
+	totalSlots := blockCount * len(midFreqPositions)
+	neededSlots := len(bits) * spreadChipsPerSymbol
+	if neededSlots > totalSlots {
+		maxSymbols := totalSlots / spreadChipsPerSymbol
+		return fmt.Errorf(
+			"payload too large for image: payload symbols=%d capacity=%d (spread=%d)",
+			len(bits),
+			maxSymbols,
+			spreadChipsPerSymbol,
+		)
 	}
 
-	rng := NewPRNG(SeedFromKey(key))
-	bitIdx := 0
+	slots, chips := shuffledSlotsAndChips(key, totalSlots, neededSlots)
+	if len(slots) != neededSlots || len(chips) != neededSlots {
+		return fmt.Errorf("failed to allocate spread mapping")
+	}
 
-embedLoop:
-	for by := 0; by < blockRows; by++ {
-		for bx := 0; bx < blockCols; bx++ {
-			if bitIdx >= len(bits) {
-				break embedLoop
-			}
+	type embedOp struct {
+		coeffIdx  int
+		direction float32
+	}
+	blockOps := make([][]embedOp, blockCount)
 
-			block := spectralmath.GetBlock8(yPad, w2, bx, by)
-			coeff := spectralmath.DCT8(block)
+	for i := 0; i < neededSlots; i++ {
+		symbolIdx := i / spreadChipsPerSymbol
+		slot := slots[i]
+		blockIdx := slot / len(midFreqPositions)
+		coeffIdx := slot % len(midFreqPositions)
 
-			for _, pos := range midFreqPositions {
-				if bitIdx >= len(bits) {
-					break
-				}
+		direction := float32(bits[symbolIdx] * chips[i])
+		blockOps[blockIdx] = append(blockOps[blockIdx], embedOp{
+			coeffIdx:  coeffIdx,
+			direction: direction,
+		})
+	}
 
-				pn := float32(1)
-				if rng.NextPM1() < 0 {
-					pn = -1
-				}
-
-				direction := float32(bits[bitIdx]) * pn
-				projected := coeff[pos.v][pos.u] * direction
-				target := alpha * 0.7
-				if projected < target {
-					coeff[pos.v][pos.u] += (target - projected) * direction
-				}
-				bitIdx++
-			}
-
-			recon := spectralmath.IDCT8(coeff)
-			clampBlockToByteRange(&recon)
-			spectralmath.SetBlock8(yPad, w2, bx, by, recon)
+	for blockIdx, ops := range blockOps {
+		if len(ops) == 0 {
+			continue
 		}
+
+		bx := blockIdx % blockCols
+		by := blockIdx / blockCols
+
+		block := spectralmath.GetBlock8(yPad, w2, bx, by)
+		coeff := spectralmath.DCT8(block)
+
+		for _, op := range ops {
+			pos := midFreqPositions[op.coeffIdx]
+			projected := coeff[pos.v][pos.u] * op.direction
+			target := alpha * spreadTargetScale
+			if projected < target {
+				coeff[pos.v][pos.u] += (target - projected) * op.direction
+			}
+		}
+
+		recon := spectralmath.IDCT8(coeff)
+		clampBlockToByteRange(&recon)
+		spectralmath.SetBlock8(yPad, w2, bx, by, recon)
 	}
 
 	yOut := spectralmath.Unpad(yPad, w2, h2, img.W, img.H)

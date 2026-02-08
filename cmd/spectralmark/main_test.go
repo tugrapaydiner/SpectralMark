@@ -82,3 +82,10 @@ func TestRunDCTCheck(t *testing.T) {
 		t.Fatalf("run() returned %d, want 0", code)
 	}
 }
+
+func TestRunPRNGDemo(t *testing.T) {
+	code := run([]string{"prng-demo", "--key", "abc", "--n", "3"})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+}

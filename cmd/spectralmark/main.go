@@ -9,6 +9,7 @@ import (
 
 	spectralimage "spectralmark/internal/image"
 	spectralmath "spectralmark/internal/math"
+	spectralwm "spectralmark/internal/wm"
 )
 
 func main() {
@@ -25,6 +26,8 @@ func run(args []string) int {
 	case "embed":
 		fmt.Println("TODO: embed")
 		return 0
+	case "prng-demo":
+		return runPRNGDemo(args[1:])
 	case "ppm-copy":
 		return runPPMCopy(args[1:])
 	case "to-gray":
@@ -58,6 +61,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  embed    TODO")
+	fmt.Fprintln(w, "  prng-demo Print deterministic PRNG samples from a key")
 	fmt.Fprintln(w, "  ppm-copy Copy a P6 PPM file")
 	fmt.Fprintln(w, "  to-gray  Convert a PPM image to grayscale")
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
@@ -197,4 +201,50 @@ func runDCTCheck(args []string) int {
 
 	fmt.Printf("max reconstruction error: %.9f\n", maxErr)
 	return 0
+}
+
+func runPRNGDemo(args []string) int {
+	fs := flag.NewFlagSet("prng-demo", flag.ContinueOnError)
+
+	var key string
+	var n int
+	fs.StringVar(&key, "key", "", "key string")
+	fs.IntVar(&n, "n", 10, "number of samples")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printPRNGDemoUsage(os.Stderr)
+		return 1
+	}
+
+	if key == "" {
+		fmt.Fprintln(os.Stderr, "--key is required")
+		printPRNGDemoUsage(os.Stderr)
+		return 1
+	}
+	if n <= 0 {
+		fmt.Fprintln(os.Stderr, "--n must be > 0")
+		printPRNGDemoUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printPRNGDemoUsage(os.Stderr)
+		return 1
+	}
+
+	seed := spectralwm.SeedFromKey(key)
+	rng := spectralwm.NewPRNG(seed)
+
+	fmt.Printf("seed: %d\n", seed)
+	for i := 0; i < n; i++ {
+		fmt.Printf("%d\n", rng.NextU64())
+	}
+
+	return 0
+}
+
+func printPRNGDemoUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark prng-demo --key <key> --n <count>")
 }

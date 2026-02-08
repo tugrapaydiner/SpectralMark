@@ -9,6 +9,7 @@ import (
 
 	spectralimage "spectralmark/internal/image"
 	spectralmath "spectralmark/internal/math"
+	spectralutil "spectralmark/internal/util"
 	spectralwm "spectralmark/internal/wm"
 )
 
@@ -44,8 +45,7 @@ func run(args []string) int {
 		fmt.Println("TODO: serve")
 		return 0
 	case "metrics":
-		fmt.Println("TODO: metrics")
-		return 0
+		return runMetrics(args[1:])
 	case "help", "-h", "--help":
 		printUsage(os.Stdout)
 		return 0
@@ -69,7 +69,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  detect   Detect watermark and recover message")
 	fmt.Fprintln(w, "  bench    TODO")
 	fmt.Fprintln(w, "  serve    TODO")
-	fmt.Fprintln(w, "  metrics  TODO")
+	fmt.Fprintln(w, "  metrics  Compute PSNR and write amplified diff image")
 	fmt.Fprintln(w, "  help     Show this help")
 }
 
@@ -378,4 +378,113 @@ func runPayloadDemo(args []string) int {
 
 func printPayloadDemoUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark payload-demo --msg <message>")
+}
+
+func runMetrics(args []string) int {
+	fs := flag.NewFlagSet("metrics", flag.ContinueOnError)
+
+	var aPath string
+	var bPath string
+	var diffPath string
+	fs.StringVar(&aPath, "a", "", "reference/original PPM path")
+	fs.StringVar(&bPath, "b", "", "comparison PPM path")
+	fs.StringVar(&diffPath, "diff", "", "output diff PPM path")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printMetricsUsage(os.Stderr)
+		return 1
+	}
+	if aPath == "" || bPath == "" || diffPath == "" {
+		fmt.Fprintln(os.Stderr, "--a, --b, and --diff are required")
+		printMetricsUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printMetricsUsage(os.Stderr)
+		return 1
+	}
+
+	imgA, err := spectralimage.ReadPPM(aPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read --a image: %v\n", err)
+		return 1
+	}
+	imgB, err := spectralimage.ReadPPM(bPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read --b image: %v\n", err)
+		return 1
+	}
+
+	if imgA.W != imgB.W || imgA.H != imgB.H {
+		fmt.Fprintf(os.Stderr, "image size mismatch: --a=%dx%d --b=%dx%d\n", imgA.W, imgA.H, imgB.W, imgB.H)
+		return 1
+	}
+
+	yA, _, _ := spectralimage.RGBToYCbCr(imgA)
+	yB, _, _ := spectralimage.RGBToYCbCr(imgB)
+	psnr := spectralutil.PSNR(yA, yB)
+
+	diffImg := buildDiffImage(imgA, imgB, 8)
+	if err := spectralimage.WritePPM(diffPath, diffImg); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write --diff image: %v\n", err)
+		return 1
+	}
+
+	if stdmath.IsInf(float64(psnr), 1) {
+		fmt.Println("PSNR: +Inf dB")
+	} else {
+		fmt.Printf("PSNR: %.4f dB\n", psnr)
+	}
+	fmt.Printf("diff image: %s\n", diffPath)
+
+	return 0
+}
+
+func printMetricsUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark metrics --a <orig.ppm> --b <other.ppm> --diff <diff.ppm>")
+}
+
+func buildDiffImage(a, b *spectralimage.Image, amplify int) *spectralimage.Image {
+	if a == nil || b == nil || a.W != b.W || a.H != b.H {
+		return &spectralimage.Image{}
+	}
+
+	pix := make([]spectralimage.Rgb, len(a.Pix))
+	for i := range pix {
+		dr := absInt(int(a.Pix[i].R)-int(b.Pix[i].R)) * amplify
+		dg := absInt(int(a.Pix[i].G)-int(b.Pix[i].G)) * amplify
+		db := absInt(int(a.Pix[i].B)-int(b.Pix[i].B)) * amplify
+
+		pix[i] = spectralimage.Rgb{
+			R: clampToUint8(dr),
+			G: clampToUint8(dg),
+			B: clampToUint8(db),
+		}
+	}
+
+	return &spectralimage.Image{
+		W:   a.W,
+		H:   a.H,
+		Pix: pix,
+	}
+}
+
+func clampToUint8(v int) uint8 {
+	if v <= 0 {
+		return 0
+	}
+	if v >= 255 {
+		return 255
+	}
+	return uint8(v)
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }

@@ -184,3 +184,50 @@ func TestRunDetect(t *testing.T) {
 		t.Fatalf("detect run() returned %d, want 0", code)
 	}
 }
+
+func TestRunMetrics(t *testing.T) {
+	dir := t.TempDir()
+	aPath := filepath.Join(dir, "a.ppm")
+	bPath := filepath.Join(dir, "b.ppm")
+	diffPath := filepath.Join(dir, "diff.ppm")
+
+	imgA := &spectralimage.Image{
+		W:   16,
+		H:   16,
+		Pix: make([]spectralimage.Rgb, 16*16),
+	}
+	imgB := &spectralimage.Image{
+		W:   16,
+		H:   16,
+		Pix: make([]spectralimage.Rgb, 16*16),
+	}
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			i := y*16 + x
+			base := uint8((x + y) % 256)
+			imgA.Pix[i] = spectralimage.Rgb{R: base, G: base, B: base}
+			imgB.Pix[i] = spectralimage.Rgb{R: base + 1, G: base, B: base}
+		}
+	}
+
+	if err := spectralimage.WritePPM(aPath, imgA); err != nil {
+		t.Fatalf("WritePPM(a) error = %v", err)
+	}
+	if err := spectralimage.WritePPM(bPath, imgB); err != nil {
+		t.Fatalf("WritePPM(b) error = %v", err)
+	}
+
+	code := run([]string{
+		"metrics",
+		"--a", aPath,
+		"--b", bPath,
+		"--diff", diffPath,
+	})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+
+	if _, err := os.Stat(diffPath); err != nil {
+		t.Fatalf("expected diff image file, got stat error: %v", err)
+	}
+}

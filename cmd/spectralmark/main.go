@@ -36,8 +36,7 @@ func run(args []string) int {
 	case "dct-check":
 		return runDCTCheck(args[1:])
 	case "detect":
-		fmt.Println("TODO: detect")
-		return 0
+		return runDetect(args[1:])
 	case "bench":
 		fmt.Println("TODO: bench")
 		return 0
@@ -67,7 +66,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  ppm-copy Copy a P6 PPM file")
 	fmt.Fprintln(w, "  to-gray  Convert a PPM image to grayscale")
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
-	fmt.Fprintln(w, "  detect   TODO")
+	fmt.Fprintln(w, "  detect   Detect watermark and recover message")
 	fmt.Fprintln(w, "  bench    TODO")
 	fmt.Fprintln(w, "  serve    TODO")
 	fmt.Fprintln(w, "  metrics  TODO")
@@ -253,6 +252,51 @@ func runDCTCheck(args []string) int {
 
 	fmt.Printf("max reconstruction error: %.9f\n", maxErr)
 	return 0
+}
+
+func runDetect(args []string) int {
+	fs := flag.NewFlagSet("detect", flag.ContinueOnError)
+
+	var inPath string
+	var key string
+	fs.StringVar(&inPath, "in", "", "input PPM path")
+	fs.StringVar(&key, "key", "", "detection key")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printDetectUsage(os.Stderr)
+		return 1
+	}
+	if inPath == "" || key == "" {
+		fmt.Fprintln(os.Stderr, "--in and --key are required")
+		printDetectUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printDetectUsage(os.Stderr)
+		return 1
+	}
+
+	score, present, msg, ok, err := spectralwm.DetectPPM(inPath, key)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "detect failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("score: %.4f\n", score)
+	fmt.Printf("present: %v\n", present)
+	fmt.Printf("decode ok: %v\n", ok)
+	if ok {
+		fmt.Printf("msg: %s\n", msg)
+	}
+
+	return 0
+}
+
+func printDetectUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark detect --in <input.ppm> --key <key>")
 }
 
 func runPRNGDemo(args []string) int {

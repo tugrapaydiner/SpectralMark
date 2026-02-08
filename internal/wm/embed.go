@@ -74,7 +74,12 @@ embedLoop:
 					pn = -1
 				}
 
-				coeff[pos.v][pos.u] += alpha * float32(bits[bitIdx]) * pn
+				direction := float32(bits[bitIdx]) * pn
+				projected := coeff[pos.v][pos.u] * direction
+				target := alpha * 0.7
+				if projected < target {
+					coeff[pos.v][pos.u] += (target - projected) * direction
+				}
 				bitIdx++
 			}
 

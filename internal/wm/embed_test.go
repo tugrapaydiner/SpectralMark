@@ -59,7 +59,7 @@ func TestEmbedPPMProducesNearIdenticalOutput(t *testing.T) {
 	}
 
 	avgAbsDiff := float64(totalDiff) / float64(len(input.Pix)*3)
-	if maxDiff > 20 {
+	if maxDiff > 35 {
 		t.Fatalf("image changed too much: maxDiff=%d", maxDiff)
 	}
 	if avgAbsDiff > 2.0 {

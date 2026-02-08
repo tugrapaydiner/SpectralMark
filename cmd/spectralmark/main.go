@@ -24,8 +24,7 @@ func run(args []string) int {
 
 	switch args[0] {
 	case "embed":
-		fmt.Println("TODO: embed")
-		return 0
+		return runEmbed(args[1:])
 	case "prng-demo":
 		return runPRNGDemo(args[1:])
 	case "payload-demo":
@@ -62,7 +61,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark <command>")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  embed    TODO")
+	fmt.Fprintln(w, "  embed    Embed payload into PPM image")
 	fmt.Fprintln(w, "  prng-demo Print deterministic PRNG samples from a key")
 	fmt.Fprintln(w, "  payload-demo Encode/decode payload bits with repetition coding")
 	fmt.Fprintln(w, "  ppm-copy Copy a P6 PPM file")
@@ -115,6 +114,56 @@ func runPPMCopy(args []string) int {
 	}
 
 	return 0
+}
+
+func runEmbed(args []string) int {
+	fs := flag.NewFlagSet("embed", flag.ContinueOnError)
+
+	var inPath string
+	var outPath string
+	var key string
+	var msg string
+	var alpha float64
+
+	fs.StringVar(&inPath, "in", "", "input PPM path")
+	fs.StringVar(&outPath, "out", "", "output PPM path")
+	fs.StringVar(&key, "key", "", "embedding key")
+	fs.StringVar(&msg, "msg", "", "message payload")
+	fs.Float64Var(&alpha, "alpha", 3.0, "embedding strength")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printEmbedUsage(os.Stderr)
+		return 1
+	}
+
+	if inPath == "" || outPath == "" || key == "" || msg == "" {
+		fmt.Fprintln(os.Stderr, "--in, --out, --key, and --msg are required")
+		printEmbedUsage(os.Stderr)
+		return 1
+	}
+	if alpha <= 0 {
+		fmt.Fprintln(os.Stderr, "--alpha must be > 0")
+		printEmbedUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printEmbedUsage(os.Stderr)
+		return 1
+	}
+
+	if err := spectralwm.EmbedPPM(inPath, outPath, key, msg, float32(alpha)); err != nil {
+		fmt.Fprintf(os.Stderr, "embed failed: %v\n", err)
+		return 1
+	}
+
+	return 0
+}
+
+func printEmbedUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark embed --in <input.ppm> --out <output.ppm> --key <key> --msg <msg> --alpha <strength>")
 }
 
 func printPPMCopyUsage(w io.Writer) {

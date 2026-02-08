@@ -96,3 +96,45 @@ func TestRunPayloadDemo(t *testing.T) {
 		t.Fatalf("run() returned %d, want 0", code)
 	}
 }
+
+func TestRunEmbed(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "in.ppm")
+	outPath := filepath.Join(dir, "out.ppm")
+
+	input := &spectralimage.Image{
+		W:   128,
+		H:   128,
+		Pix: make([]spectralimage.Rgb, 128*128),
+	}
+	for y := 0; y < input.H; y++ {
+		for x := 0; x < input.W; x++ {
+			i := y*input.W + x
+			input.Pix[i] = spectralimage.Rgb{
+				R: uint8((x + y) % 256),
+				G: uint8((2*x + y) % 256),
+				B: uint8((x + 3*y) % 256),
+			}
+		}
+	}
+
+	if err := spectralimage.WritePPM(inPath, input); err != nil {
+		t.Fatalf("WritePPM() error = %v", err)
+	}
+
+	code := run([]string{
+		"embed",
+		"--in", inPath,
+		"--out", outPath,
+		"--key", "k",
+		"--msg", "HELLO",
+		"--alpha", "3.0",
+	})
+	if code != 0 {
+		t.Fatalf("run() returned %d, want 0", code)
+	}
+
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("expected output file, got stat error: %v", err)
+	}
+}

@@ -28,16 +28,29 @@ func EmbedPPM(inPath, outPath, key, msg string, alpha float32) error {
 	if outPath == "" {
 		return fmt.Errorf("output path is required")
 	}
-	if key == "" {
-		return fmt.Errorf("key is required")
-	}
-	if alpha <= 0 {
-		return fmt.Errorf("alpha must be > 0")
-	}
 
 	img, err := spectralimage.ReadPPM(inPath)
 	if err != nil {
 		return err
+	}
+
+	outImg, err := EmbedImage(img, key, msg, alpha)
+	if err != nil {
+		return err
+	}
+
+	return spectralimage.WritePPM(outPath, outImg)
+}
+
+func EmbedImage(img *spectralimage.Image, key, msg string, alpha float32) (*spectralimage.Image, error) {
+	if img == nil {
+		return nil, fmt.Errorf("image is nil")
+	}
+	if key == "" {
+		return nil, fmt.Errorf("key is required")
+	}
+	if alpha <= 0 {
+		return nil, fmt.Errorf("alpha must be > 0")
 	}
 
 	y, cb, cr := spectralimage.RGBToYCbCr(img)
@@ -51,7 +64,7 @@ func EmbedPPM(inPath, outPath, key, msg string, alpha float32) error {
 	neededSlots := len(bits) * spreadChipsPerSymbol
 	if neededSlots > totalSlots {
 		maxSymbols := totalSlots / spreadChipsPerSymbol
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"payload too large for image: payload symbols=%d capacity=%d (spread=%d)",
 			len(bits),
 			maxSymbols,
@@ -61,7 +74,7 @@ func EmbedPPM(inPath, outPath, key, msg string, alpha float32) error {
 
 	slots, chips := shuffledSlotsAndChips(key, totalSlots, neededSlots)
 	if len(slots) != neededSlots || len(chips) != neededSlots {
-		return fmt.Errorf("failed to allocate spread mapping")
+		return nil, fmt.Errorf("failed to allocate spread mapping")
 	}
 
 	type embedOp struct {
@@ -110,8 +123,7 @@ func EmbedPPM(inPath, outPath, key, msg string, alpha float32) error {
 
 	yOut := spectralmath.Unpad(yPad, w2, h2, img.W, img.H)
 	outImg := spectralimage.YCbCrToRGB(img.W, img.H, yOut, cb, cr)
-
-	return spectralimage.WritePPM(outPath, outImg)
+	return outImg, nil
 }
 
 func clampBlockToByteRange(b *[8][8]float32) {

@@ -265,3 +265,10 @@ func TestRunBench(t *testing.T) {
 		t.Fatalf("run() returned %d, want 0", code)
 	}
 }
+
+func TestRunServeInvalidPort(t *testing.T) {
+	code := run([]string{"serve", "--port", "0"})
+	if code == 0 {
+		t.Fatalf("run() returned %d, want non-zero", code)
+	}
+}

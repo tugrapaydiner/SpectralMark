@@ -16,7 +16,18 @@ func ReadPPM(path string) (*Image, error) {
 	}
 	defer f.Close()
 
-	r := bufio.NewReader(f)
+	return readPPM(f)
+}
+
+func ReadPPMReader(r io.Reader) (*Image, error) {
+	if r == nil {
+		return nil, errors.New("reader is nil")
+	}
+	return readPPM(r)
+}
+
+func readPPM(src io.Reader) (*Image, error) {
+	r := bufio.NewReader(src)
 
 	magic, err := readRequiredToken(r, "magic")
 	if err != nil {

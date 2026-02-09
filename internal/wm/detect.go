@@ -10,19 +10,30 @@ import (
 	spectralmath "spectralmark/internal/math"
 )
 
+const maxSyncStartScan = 64
+
 func DetectPPM(path, key string) (score float32, present bool, msg string, ok bool, err error) {
 	if path == "" {
 		err = fmt.Errorf("input path is required")
-		return
-	}
-	if key == "" {
-		err = fmt.Errorf("key is required")
 		return
 	}
 
 	img, readErr := spectralimage.ReadPPM(path)
 	if readErr != nil {
 		err = readErr
+		return
+	}
+
+	return DetectImage(img, key)
+}
+
+func DetectImage(img *spectralimage.Image, key string) (score float32, present bool, msg string, ok bool, err error) {
+	if img == nil {
+		err = fmt.Errorf("image is nil")
+		return
+	}
+	if key == "" {
+		err = fmt.Errorf("key is required")
 		return
 	}
 
@@ -205,7 +216,7 @@ func decodeRawBitsDirect(rawBits []uint8, maxSyncErrors int) (msg string, ok boo
 	}
 
 	syncBits := appendWordBits(nil, payloadSyncWord)
-	for start := 0; start+32 <= len(rawBits); start++ {
+	for _, start := range candidateSyncStarts(rawBits, maxSyncStartScan) {
 		errCount := 0
 		for i := 0; i < 16; i++ {
 			if rawBits[start+i] != syncBits[i] {
@@ -261,7 +272,7 @@ func decodeRawBitsWithBitFixes(rawBits []uint8, rawConf []float32, maxSyncErrors
 	}
 
 	syncBits := appendWordBits(nil, payloadSyncWord)
-	for start := 0; start+32 <= len(rawBits); start++ {
+	for _, start := range candidateSyncStarts(rawBits, maxSyncStartScan) {
 		errCount := 0
 		for i := 0; i < 16; i++ {
 			if rawBits[start+i] != syncBits[i] {
@@ -386,6 +397,26 @@ func isPlausibleMessageBytes(data []byte) bool {
 		}
 	}
 	return true
+}
+
+func candidateSyncStarts(rawBits []uint8, maxStarts int) []int {
+	if len(rawBits) < 32 {
+		return nil
+	}
+	if maxStarts <= 0 {
+		maxStarts = 1
+	}
+
+	maxStart := len(rawBits) - 32
+	limit := maxStarts
+	if limit > maxStart+1 {
+		limit = maxStart + 1
+	}
+	out := make([]int, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, i)
+	}
+	return out
 }
 
 func candidateLengths(fieldLen uint16, maxLenFit int) []int {

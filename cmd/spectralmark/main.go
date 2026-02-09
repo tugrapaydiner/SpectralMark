@@ -7,6 +7,7 @@ import (
 	stdmath "math"
 	"os"
 
+	spectralapp "spectralmark/internal/app"
 	spectralbench "spectralmark/internal/bench"
 	spectralimage "spectralmark/internal/image"
 	spectralmath "spectralmark/internal/math"
@@ -42,8 +43,7 @@ func run(args []string) int {
 	case "bench":
 		return runBench(args[1:])
 	case "serve":
-		fmt.Println("TODO: serve")
-		return 0
+		return runServe(args[1:])
 	case "metrics":
 		return runMetrics(args[1:])
 	case "help", "-h", "--help":
@@ -68,7 +68,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
 	fmt.Fprintln(w, "  detect   Detect watermark and recover message")
 	fmt.Fprintln(w, "  bench    Run attack robustness benchmark")
-	fmt.Fprintln(w, "  serve    TODO")
+	fmt.Fprintln(w, "  serve    Start local web UI for embed/detect")
 	fmt.Fprintln(w, "  metrics  Compute PSNR and write amplified diff image")
 	fmt.Fprintln(w, "  help     Show this help")
 }
@@ -426,6 +426,41 @@ func runBench(args []string) int {
 
 func printBenchUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark bench --in <input.ppm> --key <key> --msg <msg> [--alpha <strength>]")
+}
+
+func runServe(args []string) int {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+
+	var port int
+	fs.IntVar(&port, "port", 8080, "HTTP port")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printServeUsage(os.Stderr)
+		return 1
+	}
+	if port <= 0 || port > 65535 {
+		fmt.Fprintln(os.Stderr, "--port must be in range 1..65535")
+		printServeUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printServeUsage(os.Stderr)
+		return 1
+	}
+
+	fmt.Printf("SpectralMark UI running at http://localhost:%d\n", port)
+	if err := spectralapp.Serve(port); err != nil {
+		fmt.Fprintf(os.Stderr, "serve failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func printServeUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark serve [--port <port>]")
 }
 
 func runMetrics(args []string) int {

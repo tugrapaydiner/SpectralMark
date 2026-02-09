@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpectralMark</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --text: #1b2430;
+      --muted: #5f6b7a;
+      --accent: #0a7a66;
+      --accent-2: #e8f8f4;
+      --border: #dbe3ed;
+      --danger: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(1200px 500px at 20% -20%, #e7f3ff 0%, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .wrap {
+      max-width: 880px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(16, 24, 40, 0.08);
+      overflow: hidden;
+    }
+    .head {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #ffffff 0%, #f2fffb 100%);
+    }
+    .head h1 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      letter-spacing: 0.2px;
+    }
+    .head p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .body {
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .drop {
+      border: 2px dashed #9fb3c8;
+      background: #f9fcff;
+      border-radius: 12px;
+      min-height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .drop.drag {
+      border-color: var(--accent);
+      background: var(--accent-2);
+      color: var(--text);
+    }
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      background: #eef3f8;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      outline: 2px solid #c6efe5;
+      border-color: #80d4c1;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+    }
+    button.alt {
+      background: #175cd3;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .out {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 12px;
+      font-family: Consolas, Monaco, "Courier New", monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      min-height: 90px;
+    }
+    .err {
+      color: var(--danger);
+    }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .body { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>SpectralMark Local App</h1>
+      <p>Drop a PPM, PNG, or JPEG image, then embed or detect a watermark.</p>
+    </div>
+    <div class="body">
+      <input id="fileInput" type="file" accept=".ppm,.png,.jpg,.jpeg,image/png,image/jpeg" hidden>
+      <div id="drop" class="drop">Drag & drop <code>.ppm/.png/.jpg</code> here, or click to choose.</div>
+      <div class="file-row">
+        <span class="tag">Selected file: <strong id="fileName">none</strong></span>
+      </div>
+      <div class="grid">
+        <label>Key
+          <input id="key" type="text" placeholder="k" value="k">
+        </label>
+        <label>Message (Embed only)
+          <input id="msg" type="text" placeholder="HELLO" value="HELLO">
+        </label>
+        <label>Alpha (Embed only)
+          <input id="alpha" type="number" min="0.1" step="0.1" value="5.0">
+        </label>
+      </div>
+      <div class="actions">
+        <button id="embedBtn">Embed</button>
+        <button id="detectBtn" class="alt">Detect</button>
+      </div>
+      <div id="out" class="out">Ready.</div>
+    </div>
+  </div>
+
+  <script>
+    const drop = document.getElementById("drop");
+    const fileInput = document.getElementById("fileInput");
+    const fileName = document.getElementById("fileName");
+    const out = document.getElementById("out");
+    const keyInput = document.getElementById("key");
+    const msgInput = document.getElementById("msg");
+    const alphaInput = document.getElementById("alpha");
+    const embedBtn = document.getElementById("embedBtn");
+    const detectBtn = document.getElementById("detectBtn");
+
+    let selectedFile = null;
+
+    function setOutput(text, isError = false) {
+      out.textContent = text;
+      out.classList.toggle("err", isError);
+    }
+
+    function setFile(file) {
+      selectedFile = file || null;
+      fileName.textContent = selectedFile ? selectedFile.name : "none";
+    }
+
+    function requireFileAndKey() {
+      if (!selectedFile) {
+        setOutput("Select a .ppm file first.", true);
+        return false;
+      }
+      if (!keyInput.value.trim()) {
+        setOutput("Key is required.", true);
+        return false;
+      }
+      return true;
+    }
+
+    drop.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files && fileInput.files[0]) {
+        setFile(fileInput.files[0]);
+        setOutput("File loaded.");
+      }
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      drop.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        drop.classList.add("drag");
+      });
+    });
+    ["dragleave", "drop"].forEach((eventName) => {
+      drop.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        drop.classList.remove("drag");
+      });
+    });
+    drop.addEventListener("drop", (e) => {
+      const file = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files[0] : null;
+      if (file) {
+        setFile(file);
+        setOutput("File loaded.");
+      }
+    });
+
+    async function readErrorText(response) {
+      const text = await response.text();
+      return text || ("Request failed with status " + response.status);
+    }
+
+    embedBtn.addEventListener("click", async () => {
+      if (!requireFileAndKey()) return;
+      if (!msgInput.value.trim()) {
+        setOutput("Message is required for embed.", true);
+        return;
+      }
+
+      embedBtn.disabled = true;
+      detectBtn.disabled = true;
+      setOutput("Embedding...");
+
+      try {
+        const form = new FormData();
+        form.append("file", selectedFile, selectedFile.name);
+        form.append("key", keyInput.value.trim());
+        form.append("msg", msgInput.value);
+        form.append("alpha", alphaInput.value);
+
+        const response = await fetch("/embed", { method: "POST", body: form });
+        if (!response.ok) {
+          throw new Error(await readErrorText(response));
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "watermarked.png";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setOutput("Embed succeeded. Downloaded watermarked.png");
+      } catch (err) {
+        setOutput(String(err && err.message ? err.message : err), true);
+      } finally {
+        embedBtn.disabled = false;
+        detectBtn.disabled = false;
+      }
+    });
+
+    detectBtn.addEventListener("click", async () => {
+      if (!requireFileAndKey()) return;
+
+      embedBtn.disabled = true;
+      detectBtn.disabled = true;
+      setOutput("Detecting...");
+
+      try {
+        const form = new FormData();
+        form.append("file", selectedFile, selectedFile.name);
+        form.append("key", keyInput.value.trim());
+
+        const response = await fetch("/detect", { method: "POST", body: form });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const errText = json && json.error ? json.error : ("Request failed with status " + response.status);
+          throw new Error(errText);
+        }
+
+        setOutput(JSON.stringify(json, null, 2));
+      } catch (err) {
+        setOutput(String(err && err.message ? err.message : err), true);
+      } finally {
+        embedBtn.disabled = false;
+        detectBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

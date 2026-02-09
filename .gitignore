@@ -1,0 +1,4 @@
+.gocache/
+.tmp_*.exe
+.tmp_*.log
+reports/samples/*.ppm

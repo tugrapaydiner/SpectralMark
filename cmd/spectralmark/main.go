@@ -6,6 +6,8 @@ import (
 	"io"
 	stdmath "math"
 	"os"
+	"path/filepath"
+	"strings"
 
 	spectralapp "spectralmark/internal/app"
 	spectralbench "spectralmark/internal/bench"
@@ -42,6 +44,8 @@ func run(args []string) int {
 		return runDetect(args[1:])
 	case "bench":
 		return runBench(args[1:])
+	case "demo":
+		return runDemo(args[1:])
 	case "serve":
 		return runServe(args[1:])
 	case "metrics":
@@ -68,6 +72,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  dct-check Print max reconstruction error for DCT8->IDCT8")
 	fmt.Fprintln(w, "  detect   Detect watermark and recover message")
 	fmt.Fprintln(w, "  bench    Run attack robustness benchmark")
+	fmt.Fprintln(w, "  demo     One-command embed + 3 attack demo")
 	fmt.Fprintln(w, "  serve    Start local web UI for embed/detect")
 	fmt.Fprintln(w, "  metrics  Compute PSNR and write amplified diff image")
 	fmt.Fprintln(w, "  help     Show this help")
@@ -426,6 +431,72 @@ func runBench(args []string) int {
 
 func printBenchUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: spectralmark bench --in <input.ppm> --key <key> --msg <msg> [--alpha <strength>]")
+}
+
+func runDemo(args []string) int {
+	fs := flag.NewFlagSet("demo", flag.ContinueOnError)
+
+	var inPath string
+	var outPath string
+	var key string
+	var msg string
+	var alpha float64
+	fs.StringVar(&inPath, "in", "", "input PPM path")
+	fs.StringVar(&outPath, "out", "", "output watermarked PPM path")
+	fs.StringVar(&key, "key", "k", "embedding key")
+	fs.StringVar(&msg, "msg", "HELLO", "message payload")
+	fs.Float64Var(&alpha, "alpha", 5.0, "embedding strength")
+	fs.SetOutput(io.Discard)
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse flags: %v\n", err)
+		printDemoUsage(os.Stderr)
+		return 1
+	}
+	if inPath == "" {
+		fmt.Fprintln(os.Stderr, "--in is required")
+		printDemoUsage(os.Stderr)
+		return 1
+	}
+	if alpha <= 0 {
+		fmt.Fprintln(os.Stderr, "--alpha must be > 0")
+		printDemoUsage(os.Stderr)
+		return 1
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected arguments: %v\n", fs.Args())
+		printDemoUsage(os.Stderr)
+		return 1
+	}
+	if outPath == "" {
+		outPath = defaultDemoOutputPath(inPath)
+	}
+
+	results, err := spectralbench.RunDemo(inPath, outPath, key, msg, float32(alpha))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "demo failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("embedded file: %s\n", outPath)
+	fmt.Printf("key=%s msg=%q alpha=%.2f\n", key, msg, alpha)
+	fmt.Print(spectralbench.FormatResultsTable(results))
+	return 0
+}
+
+func printDemoUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: spectralmark demo --in <input.ppm> [--out <watermarked.ppm>] [--key <key>] [--msg <msg>] [--alpha <strength>]")
+}
+
+func defaultDemoOutputPath(inPath string) string {
+	dir := filepath.Dir(inPath)
+	base := filepath.Base(inPath)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	if ext == "" {
+		ext = ".ppm"
+	}
+	return filepath.Join(dir, name+"_watermarked"+ext)
 }
 
 func runServe(args []string) int {

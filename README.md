@@ -27,7 +27,7 @@ Embed hidden messages into images that survive noise, compression, cropping, and
 | [🔥 Alpha Tuning](#-alpha-tuning) | Strength vs. quality tradeoff |
 | [🗺️ Configuration Heatmap](#️-configuration-heatmap) | Bird's-eye view of all 40 configs |
 | [⚡ Latency](#-latency) | Embed and detect timing profile |
-| [Legal Notice](#legal-notice) | Warranty, liability, and misuse responsibility |
+| [⚖️ Legal Notice](#legal-notice) | Warranty, liability, and misuse responsibility |
 | [🔧 CLI Reference](#-cli-reference) | Every command at a glance |
 | [🔬 Technical Details](#-technical-details) | Color space, DCT, spread-spectrum math |
 

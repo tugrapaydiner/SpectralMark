@@ -9,7 +9,7 @@ DCT-domain spread-spectrum image watermarking, written in pure Go.
 Embed hidden messages into images that survive noise, compression, cropping, and resizing — then detect them with a single key.
 
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](#-quick-start)
-[![License](https://img.shields.io/badge/license-MIT-6ee7b7?style=flat-square)](#)
+[![License](https://img.shields.io/badge/license-MIT-6ee7b7?style=flat-square)](LICENSE)
 [![Latency](https://img.shields.io/badge/latency-<10ms-38bdf8?style=flat-square)](#-latency)
 
 </div>
@@ -27,6 +27,7 @@ Embed hidden messages into images that survive noise, compression, cropping, and
 | [🔥 Alpha Tuning](#-alpha-tuning) | Strength vs. quality tradeoff |
 | [🗺️ Configuration Heatmap](#️-configuration-heatmap) | Bird's-eye view of all 40 configs |
 | [⚡ Latency](#-latency) | Embed and detect timing profile |
+| [Legal Notice](#legal-notice) | Warranty, liability, and misuse responsibility |
 | [🔧 CLI Reference](#-cli-reference) | Every command at a glance |
 | [🔬 Technical Details](#-technical-details) | Color space, DCT, spread-spectrum math |
 
@@ -70,6 +71,16 @@ go run ./cmd/spectralmark serve
 ```
 
 Drag and drop `.ppm`, `.png`, or `.jpg` files. Choose **Embed** to get a watermarked PNG, or **Detect** to get a JSON result.
+
+---
+
+## Legal Notice
+
+This software is provided "AS IS" without warranties of any kind.
+
+By using SpectralMark, you agree that you are solely responsible for how it is used, including compliance with all laws and regulations in your jurisdiction.
+
+The authors and contributors are not liable for misuse, unlawful use, damages, or claims arising from use of this project, to the maximum extent permitted by law. See `LICENSE` for full terms.
 
 ---
 
